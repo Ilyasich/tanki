@@ -234,12 +234,11 @@ func updateEnemyAI(e *Object) {
 	diffX := player.Pos.X - e.Pos.X
 	diffY := player.Pos.Y - e.Pos.Y
 	
-	shouldMove := false
-	
 	// С вероятностью 20% меняем тактику на случайную, чтобы не застревали
 	if rand.Float32() < 0.2 {
 		e.Dir = Direction(rand.Intn(4))
-		shouldMove = tryMove(e)
+		// Пытаемся сдвинуться в случайном направлении, результат можно игнорировать
+		tryMove(e)
 	} else {
 		// Логика преследования
 		// Если по X мы далеко, пытаемся ехать по X
@@ -250,10 +249,8 @@ func updateEnemyAI(e *Object) {
 			if diffY > 0 { e.Dir = Down } else { e.Dir = Up }
 		}
 		
-		shouldMove = tryMove(e)
-		
-		// Если уперлись (в стену), пробуем рандомное направление
-		if !shouldMove {
+		if !tryMove(e) {
+			// Если уперлись (в стену), пробуем рандомное направление
 			e.Dir = Direction(rand.Intn(4))
 			tryMove(e)
 		}
