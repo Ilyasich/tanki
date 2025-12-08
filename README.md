@@ -1,5 +1,7 @@
 # Tanki
 
+This project is under development.
+
 A simple terminal-based game written in Go using the `termbox-go` library.  
 The game runs directly in the terminal, handles keyboard events, and updates the screen with a timed loop.
 
