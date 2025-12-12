@@ -22,6 +22,11 @@ const (
 	Height = 20
 )
 
+// Настройки скорости движения (увеличьте, чтобы замедлить движение)
+const (
+	PlayerMoveDelay = 2 // number of ticks between player moves (70ms * n)
+)
+
 type Direction int
 
 const (
@@ -36,9 +41,9 @@ type Point struct {
 }
 
 type Object struct {
-	Pos    Point
-	Dir    Direction
-	id     int // Для идентификации врагов
+	Pos Point
+	Dir Direction
+	id  int // Для идентификации врагов
 }
 
 type Bullet struct {
@@ -49,12 +54,13 @@ type Bullet struct {
 
 // Глобальное состояние
 var (
-	player  Object
-	enemies []*Object // Используем указатели для удобства изменения
-	bullets []*Bullet
-	walls   map[Point]bool // Карта стен для быстрого поиска
-	score   int
-	isOver  bool
+	player             Object
+	enemies            []*Object // Используем указатели для удобства изменения
+	bullets            []*Bullet
+	walls              map[Point]bool // Карта стен для быстрого поиска
+	score              int
+	isOver             bool
+	playerMoveCooldown int
 )
 
 func main() {
@@ -110,6 +116,7 @@ func initGame() {
 	walls = make(map[Point]bool)
 	score = 0
 	isOver = false
+	playerMoveCooldown = 0
 
 	generateWalls()
 
@@ -130,7 +137,7 @@ func generateWalls() {
 		}
 		walls[Point{X: x, Y: y}] = true
 	}
-	
+
 	// Вертикальная стена посередине
 	for y := 5; y < 15; y++ {
 		walls[Point{X: Width / 2, Y: y}] = true
@@ -141,14 +148,14 @@ func spawnEnemy() {
 	// Враги появляются справа
 	x := Width - 2
 	y := rand.Intn(Height-2) + 1
-	
+
 	// Проверка, чтобы не заспавнить в стене
 	if walls[Point{X: x, Y: y}] {
 		y++ // Сдвигаем, если занято (упрощенно)
 	}
-	
+
 	enemies = append(enemies, &Object{
-		Pos: Point{X: x, Y: y}, 
+		Pos: Point{X: x, Y: y},
 		Dir: Left,
 		id:  rand.Int(),
 	})
@@ -158,16 +165,12 @@ func handleInput(ev termbox.Event) {
 	switch ev.Key {
 	case termbox.KeyArrowUp:
 		player.Dir = Up
-		tryMove(&player)
 	case termbox.KeyArrowDown:
 		player.Dir = Down
-		tryMove(&player)
 	case termbox.KeyArrowLeft:
 		player.Dir = Left
-		tryMove(&player)
 	case termbox.KeyArrowRight:
 		player.Dir = Right
-		tryMove(&player)
 	case termbox.KeySpace:
 		fireBullet(player.Pos, player.Dir)
 	}
@@ -177,17 +180,21 @@ func handleInput(ev termbox.Event) {
 func tryMove(obj *Object) bool {
 	newPos := obj.Pos
 	switch obj.Dir {
-	case Up:    newPos.Y--
-	case Down:  newPos.Y++
-	case Left:  newPos.X--
-	case Right: newPos.X++
+	case Up:
+		newPos.Y--
+	case Down:
+		newPos.Y++
+	case Left:
+		newPos.X--
+	case Right:
+		newPos.X++
 	}
 
 	// 1. Проверка границ экрана
 	if newPos.X <= 0 || newPos.X >= Width-1 || newPos.Y <= 0 || newPos.Y >= Height-1 {
 		return false
 	}
-	
+
 	// 2. Проверка стен
 	if walls[newPos] {
 		return false
@@ -208,12 +215,16 @@ func fireBullet(pos Point, dir Direction) {
 
 func moveBullet(b *Bullet) {
 	switch b.Dir {
-	case Up:    b.Pos.Y--
-	case Down:  b.Pos.Y++
-	case Left:  b.Pos.X--
-	case Right: b.Pos.X++
+	case Up:
+		b.Pos.Y--
+	case Down:
+		b.Pos.Y++
+	case Left:
+		b.Pos.X--
+	case Right:
+		b.Pos.X++
 	}
-	
+
 	// Уход за границы
 	if b.Pos.X <= 0 || b.Pos.X >= Width-1 || b.Pos.Y <= 0 || b.Pos.Y >= Height-1 {
 		b.Active = false
@@ -230,10 +241,10 @@ func moveBullet(b *Bullet) {
 // AI Врага
 func updateEnemyAI(e *Object) {
 	// 1. Простой AI: Пытаемся выровняться с игроком по одной из осей
-	
+
 	diffX := player.Pos.X - e.Pos.X
 	diffY := player.Pos.Y - e.Pos.Y
-	
+
 	// С вероятностью 20% меняем тактику на случайную, чтобы не застревали
 	if rand.Float32() < 0.2 {
 		e.Dir = Direction(rand.Intn(4))
@@ -243,19 +254,27 @@ func updateEnemyAI(e *Object) {
 		// Логика преследования
 		// Если по X мы далеко, пытаемся ехать по X
 		if math.Abs(float64(diffX)) > math.Abs(float64(diffY)) {
-			if diffX > 0 { e.Dir = Right } else { e.Dir = Left }
+			if diffX > 0 {
+				e.Dir = Right
+			} else {
+				e.Dir = Left
+			}
 		} else {
 			// Иначе по Y
-			if diffY > 0 { e.Dir = Down } else { e.Dir = Up }
+			if diffY > 0 {
+				e.Dir = Down
+			} else {
+				e.Dir = Up
+			}
 		}
-		
+
 		if !tryMove(e) {
 			// Если уперлись (в стену), пробуем рандомное направление
 			e.Dir = Direction(rand.Intn(4))
 			tryMove(e)
 		}
 	}
-	
+
 	// 2. Стрельба
 	// Если игрок на одной линии с врагом, враг стреляет с шансом 10%
 	if (e.Pos.X == player.Pos.X || e.Pos.Y == player.Pos.Y) && rand.Float32() < 0.1 {
@@ -274,13 +293,21 @@ func updateState() {
 	}
 	bullets = activeBullets
 
+	// Движение игрока: троттлинг по кадрам
+	if playerMoveCooldown <= 0 {
+		tryMove(&player)
+		playerMoveCooldown = PlayerMoveDelay
+	} else {
+		playerMoveCooldown--
+	}
+
 	// Враги
 	for _, e := range enemies {
 		// Замедляем врагов (двигаются каждый 3-й кадр, чтобы игрок был быстрее)
-		if rand.Float32() < 0.4 { 
+		if rand.Float32() < 0.25 {
 			updateEnemyAI(e)
 		}
-		
+
 		if e.Pos == player.Pos {
 			isOver = true
 		}
@@ -303,7 +330,7 @@ func updateState() {
 		}
 	}
 	enemies = activeEnemies
-	
+
 	// Проверка: убила ли пуля игрока?
 	for _, b := range bullets {
 		if b.Active && b.Pos == player.Pos {
@@ -361,10 +388,14 @@ func draw() {
 func drawTank(obj Object, color termbox.Attribute) {
 	var ch rune
 	switch obj.Dir {
-	case Up:    ch = '▲'
-	case Down:  ch = '▼'
-	case Left:  ch = '◄'
-	case Right: ch = '►'
+	case Up:
+		ch = '▲'
+	case Down:
+		ch = '▼'
+	case Left:
+		ch = '◄'
+	case Right:
+		ch = '►'
 	}
 	termbox.SetCell(obj.Pos.X, obj.Pos.Y, ch, color, termbox.ColorDefault)
 }
@@ -386,7 +417,9 @@ func drawText(x, y int, text string, fg termbox.Attribute) {
 
 func drawNumber(x, y, num int, fg termbox.Attribute) {
 	s := []rune{}
-	if num == 0 { s = append(s, '0') }
+	if num == 0 {
+		s = append(s, '0')
+	}
 	for num > 0 {
 		s = append([]rune{rune('0' + num%10)}, s...)
 		num /= 10
