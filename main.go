@@ -61,6 +61,7 @@ var (
 	score              int
 	isOver             bool
 	playerMoveCooldown int
+	rng                *rand.Rand
 )
 
 func main() {
@@ -71,7 +72,7 @@ func main() {
 	defer termbox.Close()
 
 	termbox.SetInputMode(termbox.InputEsc)
-	rand.Seed(time.Now().UnixNano())
+	rng = rand.New(rand.NewSource(time.Now().UnixNano()))
 
 	initGame()
 
@@ -129,8 +130,8 @@ func initGame() {
 func generateWalls() {
 	// Генерируем несколько случайных стен
 	for i := 0; i < 40; i++ {
-		x := rand.Intn(Width-2) + 1
-		y := rand.Intn(Height-2) + 1
+		x := rng.Intn(Width-2) + 1
+		y := rng.Intn(Height-2) + 1
 		// Не ставим стены на старте игрока
 		if x < 5 {
 			continue
@@ -147,7 +148,7 @@ func generateWalls() {
 func spawnEnemy() {
 	// Враги появляются справа
 	x := Width - 2
-	y := rand.Intn(Height-2) + 1
+	y := rng.Intn(Height-2) + 1
 
 	// Проверка, чтобы не заспавнить в стене
 	if walls[Point{X: x, Y: y}] {
@@ -157,7 +158,7 @@ func spawnEnemy() {
 	enemies = append(enemies, &Object{
 		Pos: Point{X: x, Y: y},
 		Dir: Left,
-		id:  rand.Int(),
+		id:  rng.Int(),
 	})
 }
 
@@ -246,8 +247,8 @@ func updateEnemyAI(e *Object) {
 	diffY := player.Pos.Y - e.Pos.Y
 
 	// С вероятностью 20% меняем тактику на случайную, чтобы не застревали
-	if rand.Float32() < 0.2 {
-		e.Dir = Direction(rand.Intn(4))
+	if rng.Float32() < 0.2 {
+		e.Dir = Direction(rng.Intn(4))
 		// Пытаемся сдвинуться в случайном направлении, результат можно игнорировать
 		tryMove(e)
 	} else {
@@ -270,14 +271,14 @@ func updateEnemyAI(e *Object) {
 
 		if !tryMove(e) {
 			// Если уперлись (в стену), пробуем рандомное направление
-			e.Dir = Direction(rand.Intn(4))
+			e.Dir = Direction(rng.Intn(4))
 			tryMove(e)
 		}
 	}
 
 	// 2. Стрельба
 	// Если игрок на одной линии с врагом, враг стреляет с шансом 10%
-	if (e.Pos.X == player.Pos.X || e.Pos.Y == player.Pos.Y) && rand.Float32() < 0.1 {
+	if (e.Pos.X == player.Pos.X || e.Pos.Y == player.Pos.Y) && rng.Float32() < 0.1 {
 		fireBullet(e.Pos, e.Dir)
 	}
 }
@@ -304,7 +305,7 @@ func updateState() {
 	// Враги
 	for _, e := range enemies {
 		// Замедляем врагов (двигаются каждый 3-й кадр, чтобы игрок был быстрее)
-		if rand.Float32() < 0.25 {
+		if rng.Float32() < 0.25 {
 			updateEnemyAI(e)
 		}
 
@@ -340,7 +341,7 @@ func updateState() {
 
 	// Респавн
 	if len(enemies) < 3 {
-		if rand.Float32() < 0.05 { // Не мгновенный респавн
+		if rng.Float32() < 0.05 { // Не мгновенный респавн
 			spawnEnemy()
 		}
 	}
