@@ -62,6 +62,7 @@ var (
 	isOver             bool
 	playerMoveCooldown int
 	rng                *rand.Rand
+	paused             bool
 )
 
 func main() {
@@ -118,6 +119,7 @@ func initGame() {
 	score = 0
 	isOver = false
 	playerMoveCooldown = 0
+	paused = false
 
 	generateWalls()
 
@@ -163,6 +165,11 @@ func spawnEnemy() {
 }
 
 func handleInput(ev termbox.Event) {
+	// Toggle pause with 'p' or 'P'
+	if ev.Ch == 'p' || ev.Ch == 'P' {
+		paused = !paused
+		return
+	}
 	switch ev.Key {
 	case termbox.KeyArrowUp:
 		player.Dir = Up
@@ -284,6 +291,10 @@ func updateEnemyAI(e *Object) {
 }
 
 func updateState() {
+	// Если пауза — не двигаем игровую логику
+	if paused {
+		return
+	}
 	// Пули
 	activeBullets := []*Bullet{}
 	for _, b := range bullets {
@@ -382,6 +393,12 @@ func draw() {
 	drawText(1, Height, "ESC:Exit SPACE:Fire", termbox.ColorWhite)
 	drawText(Width-10, Height, "Score:", termbox.ColorCyan)
 	drawNumber(Width-3, Height, score, termbox.ColorCyan)
+
+	// Пауза: отображаем оверлей
+	if paused {
+		msg := "PAUSED"
+		drawText(Width/2-len(msg)/2, Height/2, msg, termbox.ColorYellow)
+	}
 
 	termbox.Flush()
 }
